@@ -28,7 +28,7 @@ exports.handler = function (event, context) {
                 event.session,
                 function callback(sessionAttributes, speechletResponse) {
                     context.succeed(buildResponse(sessionAttributes, speechletResponse));
-                });
+                },context);
         } else if (event.request.type === "SessionEndedRequest") {
             onSessionEnded(event.request, event.session);
             context.succeed();
@@ -58,7 +58,7 @@ function onLaunch(launchRequest, session, callback) {
 /**
  * Called when the user specifies an intent for this skill.
  */
-function onIntent(intentRequest, session, callback) {
+function onIntent(intentRequest, session, callback, context) {
     console.log("onIntent requestId=" + intentRequest.requestId + ", sessionId=" + session.sessionId);
 
     var intent = intentRequest.intent,
@@ -66,7 +66,7 @@ function onIntent(intentRequest, session, callback) {
 
     // Dispatch to your skill's intent handlers
     if ("WhoIsThisSuperhero" === intentName) {
-        getSuperhero(intent, session, callback);
+        getSuperhero(intent, session, callback, context);
     } else if ("AMAZON.HelpIntent" === intentName) {
         getWelcomeResponse(callback);
     } else if ("AMAZON.StopIntent" === intentName || "AMAZON.CancelIntent" === intentName) {
@@ -102,18 +102,18 @@ function getWelcomeResponse(callback) {
 
 function handleSessionEndRequest(callback) {
     var cardTitle = "Session Ended";
-    var speechOutput = "Thank you for your inquiries, I will power off for now to recharge!";
+    var speechOutput = "I will power off for now to recharge!";
     // Setting this to true ends the session and exits the skill.
     var shouldEndSession = true;
 
     callback({}, buildSpeechletResponse(cardTitle, speechOutput, null, shouldEndSession));
 }
 
-function getSuperhero(intent, session, callback) {
+function getSuperhero(intent, session, callback, context) {
     var cardTitle = intent.name;
     var repromptText = "";
     var sessionAttributes = {};
-    var shouldEndSession = true;
+    var shouldEndSession = false;
     var speechOutput = "";
     var http = require( 'http' );
 
@@ -138,8 +138,10 @@ function getSuperhero(intent, session, callback) {
                   
                     var description = json.data.results[0].description;
                     
+                    saveSuperheroData(json.data.results[0],callback);
+                    
                     if (description === ""){
-                        speechOutput = heroname + ", does not have a description."
+                        speechOutput = heroname + ", does not have a description.";
                     }else{
                         speechOutput = heroname + ", " + description;
                     }
@@ -147,8 +149,7 @@ function getSuperhero(intent, session, callback) {
                 } else{
                     speechOutput = "I couldn't find any hero under that name.";
                     repromptText = "";   
-                }
-                console.log(speechOutput);          
+                }       
                     
                 callback(sessionAttributes,buildSpeechletResponse(cardTitle, speechOutput, repromptText, shouldEndSession));
             } );
@@ -166,6 +167,33 @@ function getSuperhero(intent, session, callback) {
     }
 }
 
+function saveSuperheroData(superheroData,callback){
+    
+    var AWS = require("aws-sdk");
+    var doc = require('dynamodb-doc');
+    var dynamodb = new doc.DynamoDB();
+    var params = {
+    Item: {
+        //heroId: {N: superheroData.id},
+        //Data: {S: JSON.stringify(superheroData)}
+        heroId: {N: 123},
+        data: {S: "Test"}
+    },
+    TableName: 'JarvisSkillHeroData'
+    };
+            
+    dynamodb.putItem(params, function(err, data) {
+    if (err) console.log(err, err.stack); // an error occurred
+    else     console.log(data);           // successful response
+    });
+    /*dynamodb.putItem(json, function(error, results) {
+        if (err) {
+            console.log('ERROR: Dynamo failed: ' + error + " " + results);
+        } else {
+            console.log('Dynamo Success: ' + JSON.stringify(data, null, '  '));
+        }
+    }); */
+}
 // --------------- Helpers that build all of the responses -----------------------
 
 function buildSpeechletResponse(title, output, repromptText, shouldEndSession) {
