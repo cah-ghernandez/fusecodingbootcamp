@@ -58,13 +58,19 @@ exports.handler = function( event, context ) {
 };
 
 function getSuperhero(intent, context) {
+    // Library imports
+    var AWS = require("aws-sdk");
+    var doc = require('dynamodb-doc');
+    var http = require('http');
+    
+    // Variables
     var cardTitle = intent.name;
     var repromptText = "";
     var shouldEndSession = true;
     var speechOutput = "";
-    
-    var http = require( 'http' );
-
+    var dynamodb = new doc.DynamoDB();
+    var params = {}
+  
     if (intent.slots.heroname) {
         var heroname = intent.slots.heroname.value;
         var apikey = "e992ac3e89d0d8597249d43fcb22a929";
@@ -83,20 +89,83 @@ function getSuperhero(intent, context) {
                 var json = JSON.parse(data);
                 
                 if (json.data.results.length > 0){
-                  
-                    var description = json.data.results[0].description;
+                    var superheroData = json.data.results[0];
                     
-                    if (description === ""){
+                    if (superheroData.description === ""){
                         speechOutput = heroname + ", does not have a description.";
                     }else{
-                        speechOutput = heroname + ", " + description;
+                        speechOutput = heroname + ", " + superheroData.description;
                     }
-                    repromptText = "";  
+                                 
+                    params = {
+                        TableName : "JarvisSkillHeroData",
+                        KeyConditionExpression: "heroId = :superheroId",
+                        ExpressionAttributeValues: {
+                            ":superheroId":superheroData.id
+                        }
+                    };
+                    
+                     dynamodb.query(params, function(err, data) {
+                        if (err) {
+                            context.fail('ERROR: Query failed: ' + err + " Data:" + JSON.stringify(params)); // an error occurred
+                        } else {
+                            console.log("Sucess Update of: ." + JSON.stringify(params));
+                            
+                            if (data.Count > 0){
+                                
+                                params = {
+                                    TableName: "JarvisSkillHeroData",
+                                    Key:{
+                                        "heroId": superheroData.id
+                                    },
+                                    UpdateExpression: "set timesAsked = timesAsked + :val",
+                                    ExpressionAttributeValues:{
+                                        ":val":1
+                                    },
+                                    ReturnValues:"UPDATED_NEW"
+                                };
+                                    
+                                dynamodb.updateItem(params, function(err, data) {
+                                    if (err){
+                                        context.fail('ERROR: Update failed: ' + err + " Data: " + JSON.stringify(params)); // an error occurred
+                                    }
+                                    else {    
+                                        console.log("Success Update of: " + JSON.stringify(params)); 
+                                        sendOutput(cardTitle, speechOutput, repromptText, shouldEndSession, context);// successful update
+                                    }
+                                });                   
+                            }else{
+                                params = {
+                                    Item: {
+                                        heroId: superheroData.id,
+                                        name: superheroData.name,
+                                        description: superheroData.description,
+                                        image: superheroData.thumbnail.path + "." + superheroData.thumbnail.extension,
+                                        timesAsked: 1
+                                    },
+                                    TableName: 'JarvisSkillHeroData'
+                                };
+                                
+                                dynamodb.putItem(params, function(err, data) {
+                                    if (err){
+                                        context.fail('ERROR: Insert failed: ' + err + " Data: " + JSON.stringify(params)); // an error occurred
+                                    }
+                                    else {    
+                                        console.log("Success Insert of: " + parJSON.stringify(params)); 
+                                        sendOutput(cardTitle, speechOutput, repromptText, shouldEndSession, context);// successful insert
+                                    }
+                                });    
+                            }
+                        }
+                    });                  
+                                     
+                    /*
+                   */
+                      
                 } else{
-                    speechOutput = "I couldn't find any hero under that name.";
-                    repromptText = "";   
+                    speechOutput = "I couldn't find any hero under that name."; 
                 }    
-                saveSuperheroData(json.data.results[0], cardTitle, speechOutput, repromptText, shouldEndSession, context);    
+                //saveSuperheroData(json.data.results[0], cardTitle, speechOutput, repromptText, shouldEndSession, context);    
             } );
         }).on('error', function (e) {
                 console.log("Got error: " + e.message);  
@@ -112,40 +181,6 @@ function getSuperhero(intent, context) {
     }
 }
 
-function saveSuperheroData(superheroData,cardTitle, speechOutput, repromptText, shouldEndSession, context){
-    
-    var AWS = require("aws-sdk");
-    var doc = require('dynamodb-doc');
-    var dynamodb = new doc.DynamoDB();
-    var params = {
-    Item: {
-        heroId: superheroData.id,
-        name: superheroData.name,
-        description: superheroData.description,
-        image: superheroData.thumbnail.path + "." + superheroData.thumbnail.extension,
-        count: 0
-    },
-    TableName: 'JarvisSkillHeroData'
-    };
-            
-    dynamodb.putItem(params, function(err, data) {
-        if (err){
-            context.fail('ERROR: Dynamo failed: ' + err); // an error occurred
-        }
-        else {    
-            console.log(data); 
-            sendOutput(cardTitle, speechOutput, repromptText, shouldEndSession, context);// successful response
-        }
-    });
-    /*dynamodb.putItem(json, function(error, results) {
-        if (err) {
-            console.log('ERROR: Dynamo failed: ' + error + " " + results);
-        } else {
-            console.log('Dynamo Success: ' + JSON.stringify(data, null, '  '));
-        }
-    }); */ 
-}
-    
 function sendOutput(cardTitle, text, repromptText, shouldEndSession, context) {
 
     var response = {
@@ -164,7 +199,7 @@ function sendOutput(cardTitle, text, repromptText, shouldEndSession, context) {
                 text: repromptText
             }
         },
-        shouldEndSession: false
+        shouldEndSession: shouldEndSession
     };
     console.log(JSON.stringify(response));
     context.succeed( { response: response } );
