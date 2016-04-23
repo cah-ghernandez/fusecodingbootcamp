@@ -139,33 +139,28 @@ function getSuperhero(intent, context) {
                                     Item: {
                                         heroId: superheroData.id,
                                         name: superheroData.name,
-                                        description: superheroData.description,
-                                        image: superheroData.thumbnail.path + "." + superheroData.thumbnail.extension,
                                         timesAsked: 1
                                     },
                                     TableName: 'JarvisSkillHeroData'
                                 };
-                                
+                                if (superheroData.description) params.Item.description = superheroData.description;
+                                if (superheroData.thumbnail.path) params.Item.image = superheroData.thumbnail.path + "." + superheroData.thumbnail.extension;
+
                                 dynamodb.putItem(params, function(err, data) {
                                     if (err){
                                         context.fail('ERROR: Insert failed: ' + err + " Data: " + JSON.stringify(params)); // an error occurred
                                     }
                                     else {    
-                                        console.log("Success Insert of: " + parJSON.stringify(params)); 
+                                        console.log("Success Insert of: " + JSON.stringify(params)); 
                                         sendOutput(cardTitle, speechOutput, repromptText, shouldEndSession, context);// successful insert
                                     }
                                 });    
                             }
                         }
-                    });                  
-                                     
-                    /*
-                   */
-                      
+                    });                                                 
                 } else{
                     speechOutput = "I couldn't find any hero under that name."; 
-                }    
-                //saveSuperheroData(json.data.results[0], cardTitle, speechOutput, repromptText, shouldEndSession, context);    
+                }        
             } );
         }).on('error', function (e) {
                 console.log("Got error: " + e.message);  
