@@ -6,7 +6,7 @@
 exports.handler = function( event, context ) {
     try {
         // Validate that Jarvis is the one talking to Lambda
-        if (event.session.application.applicationId !== "amzn1.echo-sdk-ams.app.846681cc-a33a-425f-8a7e-eb7918b431b6") {
+        if (event.session.application.applicationId !== "amzn1.echo-sdk-ams.app.3b50e2ae-782b-4a96-b911-6a9a8d3f3599") {
             context.fail("Invalid Application ID");
         }
 
